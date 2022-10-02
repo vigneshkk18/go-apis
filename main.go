@@ -18,7 +18,7 @@ func main() {
 	r := gin.Default()
 
 	routes.InitializeRoutes(r)
-	if err := r.Run(":" + initializers.PORT); err != nil {
+	if err := r.Run(); err != nil {
 		log.Panicf("error: %s", err)
 	}
 }
