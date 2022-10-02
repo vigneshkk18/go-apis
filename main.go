@@ -1,7 +1,7 @@
 package main
 
 import (
-	"net/http"
+	"log"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vigneshkk18/go-apis/initializers"
@@ -18,5 +18,7 @@ func main() {
 	r := gin.Default()
 
 	routes.InitializeRoutes(r)
-	http.ListenAndServe(":5000", r)
+	if err := r.Run(":" + initializers.PORT); err != nil {
+		log.Panicf("error: %s", err)
+	}
 }
