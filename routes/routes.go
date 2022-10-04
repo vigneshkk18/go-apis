@@ -11,7 +11,7 @@ func InitializeRoutes(r *gin.Engine) {
 	// Typing Practice route
 	tpGroup := r.Group("/typing-practice")
 	{
-		tpGroup.GET("/user-activity/:emailId/stats", GetUserActivity)
+		tpGroup.GET("/user-activity/:emailId", GetUserActivity)
 		tpGroup.POST("/user-activity", CreateUserActivity)
 	}
 }
