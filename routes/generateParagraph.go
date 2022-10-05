@@ -5,20 +5,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vigneshkk18/go-apis/controllers"
+	"github.com/vigneshkk18/go-apis/utils"
 )
 
-var difficultyMap = map[string]uint{
-	"easy":   10,
-	"medium": 15,
-	"hard":   20,
-	"expert": 25,
+func GetDifficultyOptions(c *gin.Context) {
+	difficultyOptions, _ := controllers.GetDifficultyOptions()
+	c.JSON(http.StatusOK, gin.H{
+		"data": difficultyOptions,
+	})
 }
 
 func GetRandomParagraph(c *gin.Context) {
 	// get difficulty level from params
 	difficulty := c.Param("difficulty")
 
-	val, ok := difficultyMap[difficulty]
+	val, ok := utils.DifficultyMap[difficulty]
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid difficulty",
@@ -36,5 +37,5 @@ func GetRandomParagraph(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, gin.H{"data": para})
+	c.JSON(http.StatusOK, gin.H{"data": para})
 }

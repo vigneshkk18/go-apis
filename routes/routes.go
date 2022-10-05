@@ -25,7 +25,11 @@ func InitializeRoutes(r *gin.Engine) {
 	r.Use(CORSMiddleware())
 
 	// Non - Project Specific Routes
-	r.GET("/generate-paragraph/:difficulty", GetRandomParagraph)
+	gpGroup := r.Group("/generate-paragraph")
+	{
+		gpGroup.GET("/difficulty-options", GetDifficultyOptions)
+		gpGroup.GET("/:difficulty", GetRandomParagraph)
+	}
 
 	// Typing Practice route
 	tpGroup := r.Group("/typing-practice")
