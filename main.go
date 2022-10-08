@@ -18,6 +18,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
+	r.Use(middleware.CORSMiddleware())
 	r.Use(middleware.AuthRequired())
 
 	routes.InitializeRoutes(r)
