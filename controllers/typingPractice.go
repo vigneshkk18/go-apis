@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
+	"github.com/vigneshkk18/go-apis/helpers"
 	"github.com/vigneshkk18/go-apis/initializers"
 	"github.com/vigneshkk18/go-apis/models"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -22,9 +22,9 @@ func TP_CreateUserActivity(userActivity models.UserActivityRecord) error {
 	return err
 }
 
-func TP_GetUserActivity(emailId string) ([]models.UserActivityRecord, error) {
+func TP_GetUserActivity(emailId string, year int, month int, week int, day int, groupBy string) ([]models.UserActivityRecord, error) {
 	collection := getCollection()
-	filter := bson.M{"email": emailId}
+	filter := helpers.GetUserActivityFilterQuery(emailId, year, month, week, day, groupBy)
 
 	// Get all user activity records
 	cursor, err := collection.Find(context.Background(), filter)

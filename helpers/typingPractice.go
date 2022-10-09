@@ -1,99 +1,177 @@
 package helpers
 
 import (
+	"strconv"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/vigneshkk18/go-apis/models"
 	"github.com/vigneshkk18/go-apis/utils"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// initialize all days in a week
-func initializeDaysInWeek(week int) map[int]models.Day {
-	days := map[int]models.Day{}
+func GetUserActivityQueryParams(c *gin.Context) (int, int, int, int) {
+	var queries = [4]string{"year", "month", "week", "day"}
+	var values = [4]int{}
 
-	for i := 1; i <= 7; i++ {
-		currDay := (week * 7) + i
-		days[currDay] = models.Day{Day: currDay, Hit: 0, Activities: []models.Activity{}}
+	for i := 0; i < len(queries); i++ {
+		if val := c.Query(queries[i]); val != "" {
+			value, _ := strconv.Atoi(val)
+			values[i] = value
+		} else {
+			values[i] = -1
+		}
 	}
 
-	return days
+	return values[0], values[1], values[2], values[3]
 }
 
-// initialize all weeks in a month, internally calls initializeDaysInWeek.
-func initializeWeeksInMonth() map[int]models.Week {
-	weeks := map[int]models.Week{}
+func GetUserActivityFilterQuery(email string, year int, month int, week int, day int, groupBy string) primitive.M {
+	filter := bson.M{"email": email}
 
-	for i := 0; i < 4; i++ {
-		weeks[i] = models.Week{Week: i, Hit: 0, Days: initializeDaysInWeek(i)}
+	if groupBy == "ALL" {
+		return filter
 	}
 
-	return weeks
-}
+	var (
+		startDate time.Time
+		endDate   time.Time
+	)
 
-// initialize all months in a year, internally calls initializeWeeksInMonth.
-func initializeMonthsInYear() map[string]models.Month {
-	months := map[string]models.Month{}
-
-	for i := 1; i <= 12; i++ {
-		monthName := time.Month(i).String()
-		months[monthName] = models.Month{Month: monthName, Hit: 0, Weeks: initializeWeeksInMonth()}
+	if groupBy == "GROUP_BY_DAY" {
+		startDate = utils.Date(year, month, day)
+		endDate = startDate.AddDate(0, 0, 1)
+	} else if groupBy == "GROUP_BY_WEEK" {
+		startDate = utils.Date(year, month, utils.GetStartDateOfWeek(week))
+		endDate = startDate.AddDate(0, 0, 7)
+	} else if groupBy == "GROUP_BY_MONTH" {
+		startDate = utils.Date(year, month, 1)
+		endDate = startDate.AddDate(0, 1, 0)
+	} else if groupBy == "GROUP_BY_YEAR" {
+		startDate = utils.Date(year, 1, 1)
+		endDate = startDate.AddDate(1, 0, 0)
 	}
 
-	return months
+	parsedStartDate := primitive.NewDateTimeFromTime(startDate)
+	parsedEndDate := primitive.NewDateTimeFromTime(endDate)
+
+	filter = bson.M{
+		"email": email,
+		"completed_at": bson.M{
+			"$gt": parsedStartDate,
+			"$lt": parsedEndDate,
+		},
+	}
+
+	return filter
 }
 
 // group activities by year -> month -> week -> day -> activities
-func GroupActivities(userActivities []models.UserActivityRecord) models.GroupedUserActivity {
-	groupedUserActivities := models.GroupedUserActivity{}
-
-	for _, userActivity := range userActivities {
-		Time := userActivity.CompletedAt.Time()
-		year := Time.Year()
-		month := Time.Month().String()
-		day := Time.Day()
-		week := day % 7
-		timeTaken := utils.TimeTaken(userActivity.CompletedIn)
-		activity := models.Activity{TimeTaken: timeTaken, WPM: userActivity.WPM, Accuracy: userActivity.Accuracy, Difficulty: userActivity.Difficulty}
-
-		activityByYear, ok := groupedUserActivities[year]
-		if ok {
-			activityByYear.Hit = activityByYear.Hit + 1
-
-			activityByMonth := activityByYear.Months[month]
-			activityByWeek := activityByMonth.Weeks[week]
-			activityByDay := activityByWeek.Days[day]
-
-			// increment user activity in day, activities
-			activityByDay.Hit = activityByDay.Hit + 1
-			activityByDay.Activities = append(activityByDay.Activities, activity)
-			activityByWeek.Days[day] = activityByDay
-
-			// increment user activity in week, month.
-			activityByWeek.Hit = activityByWeek.Hit + 1
-			activityByMonth.Weeks[week] = activityByWeek
-
-			activityByMonth.Hit = activityByMonth.Hit + 1
-			activityByYear.Months[month] = activityByMonth
-		} else {
-			// initialize months
-			months := initializeMonthsInYear()
-			monthObj := months[month]
-			weekObj := monthObj.Weeks[week]
-			dayObj := weekObj.Days[day]
-
-			// increment user activity in day, activities
-			dayObj.Hit = dayObj.Hit + 1
-			dayObj.Activities = append(dayObj.Activities, activity)
-			weekObj.Days[day] = dayObj // set updated day -> week
-
-			monthObj.Hit = monthObj.Hit + 1 // increment user activity in month
-			monthObj.Weeks[week] = weekObj  // set updated week -> month
-
-			activityByYear = models.Year{Year: year, Hit: 1, Months: months}
-		}
-
-		groupedUserActivities[year] = activityByYear
+func GroupActivities(userActivities []models.UserActivityRecord, groupBy string) models.GroupedUserActivityMap {
+	if groupBy == "GROUP_BY_YEAR" {
+		return GroupActivitiesByMonth(userActivities)
+	} else if groupBy == "GROUP_BY_MONTH" {
+		return GroupActivitiesByWeek(userActivities)
+	} else if groupBy == "GROUP_BY_WEEK" {
+		return GroupActivitiesByDay(userActivities)
+	} else if groupBy == "GROUP_BY_DAY" {
+		return GroupActivitiesByIndex(userActivities)
 	}
 
-	return groupedUserActivities
+	return GroupActivitiesByYear(userActivities)
+}
+
+func GroupActivitiesByYear(userActivities []models.UserActivityRecord) models.GroupedUserActivityMap {
+	groupedActivities := models.GroupedUserActivityMap{}
+
+	for _, activity := range userActivities {
+		userActivity := models.Activity{CompletedIn: utils.TimeTaken(activity.CompletedIn), Accuracy: activity.Accuracy, WPM: activity.Accuracy, Difficulty: activity.Difficulty}
+
+		year := activity.CompletedAt.Time().Year()
+		if activityByYear, ok := groupedActivities[year]; ok {
+			activityByYear.Hit = activityByYear.Hit + 1
+			activityByYear.Activities = append(activityByYear.Activities, userActivity)
+			groupedActivities[year] = activityByYear
+		} else {
+			groupedActivities[year] = models.GroupedUserActivity{Value: year, Hit: 1, Activities: []models.Activity{userActivity}}
+		}
+	}
+
+	return groupedActivities
+}
+
+func GroupActivitiesByMonth(userActivities []models.UserActivityRecord) models.GroupedUserActivityMap {
+	groupedActivities := models.GroupedUserActivityMap{}
+
+	for _, activity := range userActivities {
+		userActivity := models.Activity{CompletedIn: utils.TimeTaken(activity.CompletedIn), Accuracy: activity.Accuracy, WPM: activity.Accuracy, Difficulty: activity.Difficulty}
+
+		month := utils.MonthInt[activity.CompletedAt.Time().Month().String()]
+		if activityByMonth, ok := groupedActivities[month]; ok {
+			activityByMonth.Hit = activityByMonth.Hit + 1
+			activityByMonth.Activities = append(activityByMonth.Activities, userActivity)
+			groupedActivities[month] = activityByMonth
+		} else {
+			groupedActivities[month] = models.GroupedUserActivity{Value: month, Hit: 1, Activities: []models.Activity{userActivity}}
+		}
+	}
+
+	return groupedActivities
+}
+
+func GroupActivitiesByWeek(userActivities []models.UserActivityRecord) models.GroupedUserActivityMap {
+	groupedActivities := models.GroupedUserActivityMap{}
+
+	for _, activity := range userActivities {
+		userActivity := models.Activity{CompletedIn: utils.TimeTaken(activity.CompletedIn), Accuracy: activity.Accuracy, WPM: activity.Accuracy, Difficulty: activity.Difficulty}
+
+		week := activity.CompletedAt.Time().Day() % 7
+		if activityByWeek, ok := groupedActivities[week]; ok {
+			activityByWeek.Hit = activityByWeek.Hit + 1
+			activityByWeek.Activities = append(activityByWeek.Activities, userActivity)
+			groupedActivities[week] = activityByWeek
+		} else {
+			groupedActivities[week] = models.GroupedUserActivity{Value: week, Hit: 1, Activities: []models.Activity{userActivity}}
+		}
+	}
+
+	return groupedActivities
+}
+
+func GroupActivitiesByDay(userActivities []models.UserActivityRecord) models.GroupedUserActivityMap {
+	groupedActivities := models.GroupedUserActivityMap{}
+
+	for _, activity := range userActivities {
+		userActivity := models.Activity{CompletedIn: utils.TimeTaken(activity.CompletedIn), Accuracy: activity.Accuracy, WPM: activity.Accuracy, Difficulty: activity.Difficulty}
+
+		day := activity.CompletedAt.Time().Day()
+		if activityByDay, ok := groupedActivities[day]; ok {
+			activityByDay.Hit = activityByDay.Hit + 1
+			activityByDay.Activities = append(activityByDay.Activities, userActivity)
+			groupedActivities[day] = activityByDay
+		} else {
+			groupedActivities[day] = models.GroupedUserActivity{Value: day, Hit: 1, Activities: []models.Activity{userActivity}}
+		}
+	}
+
+	return groupedActivities
+}
+
+func GroupActivitiesByIndex(userActivities []models.UserActivityRecord) models.GroupedUserActivityMap {
+	groupedActivities := models.GroupedUserActivityMap{}
+
+	for idx, activity := range userActivities {
+		userActivity := models.Activity{CompletedIn: utils.TimeTaken(activity.CompletedIn), Accuracy: activity.Accuracy, WPM: activity.Accuracy, Difficulty: activity.Difficulty}
+
+		if activityByIdx, ok := groupedActivities[idx]; ok {
+			activityByIdx.Hit = activityByIdx.Hit + 1
+			activityByIdx.Activities = append(activityByIdx.Activities, userActivity)
+			groupedActivities[idx] = activityByIdx
+		} else {
+			groupedActivities[idx] = models.GroupedUserActivity{Value: idx, Hit: 1, Activities: []models.Activity{userActivity}}
+		}
+	}
+
+	return groupedActivities
 }
