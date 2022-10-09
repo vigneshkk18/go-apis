@@ -23,8 +23,12 @@ func TimeTaken(t string) float64 {
 	return val
 }
 
-func Date(year int, month int, day int) time.Time {
-	return time.Date(year, time.Month(month), day, 1, 1, 1, 1, time.UTC)
+func DateFromStr(date string) time.Time {
+	strSplit := strings.Split(date, "-")
+	year, _ := strconv.Atoi(strSplit[0])
+	month, _ := strconv.Atoi(strSplit[1])
+	day, _ := strconv.Atoi(strSplit[2])
+	return time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
 }
 
 func GetStartDateOfWeek(week int) int {

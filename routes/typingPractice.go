@@ -8,7 +8,6 @@ import (
 	"github.com/vigneshkk18/go-apis/controllers"
 	"github.com/vigneshkk18/go-apis/helpers"
 	"github.com/vigneshkk18/go-apis/models"
-	"github.com/vigneshkk18/go-apis/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -42,6 +41,7 @@ func CreateUserActivity(c *gin.Context) {
 func GetUserActivity(c *gin.Context) {
 	// get emailid from params
 	emailId := c.Param("emailId")
+	date := c.Query("date")
 
 	if emailId == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -49,18 +49,9 @@ func GetUserActivity(c *gin.Context) {
 		})
 		return
 	}
-
-	year, month, week, day := helpers.GetUserActivityQueryParams(c)
-	groupBy := utils.GroupBy(year, month, week, day)
-
 	// get user activity from received emailid
-	userActivities, err := controllers.TP_GetUserActivity(emailId, year, month, week, day, groupBy)
-	var groupedActivities any
-	if groupBy == "GROUP_BY_DAY" {
-		groupedActivities = userActivities
-	} else {
-		groupedActivities = helpers.GroupActivities(userActivities, groupBy)
-	}
+	userActivities, err := controllers.TP_GetUserActivity(emailId, date)
+	activities := helpers.TransformActivity(userActivities)
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -70,6 +61,6 @@ func GetUserActivity(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data": groupedActivities,
+		"data": activities,
 	})
 }

@@ -31,17 +31,9 @@ func (u UserActivityRecord) IsValid() bool {
 	return isValid
 }
 
-type GroupedUserActivity struct {
-	Value      any        `json:"value" bson:"value"`
-	Hit        int        `json:"hit" bson:"hit"`
-	Activities []Activity `json:"activities" bson:"activities"`
-}
-
-type GroupedUserActivityMap map[int]GroupedUserActivity
-
 type Activity struct {
-	CompletedIn float64 `json:"completedIn" bson:"completed_in"`
-	Accuracy    float64 `json:"accuracy" bson:"accuracy"`
-	WPM         float64 `json:"wpm" bson:"wpm"`
-	Difficulty  string  `json:"difficulty" bson:"difficulty"`
+	TimeTaken  float64 `json:"timeTaken" bson:"completed_in"`
+	Accuracy   float64 `json:"accuracy" bson:"accuracy"`
+	WPM        float64 `json:"wpm" bson:"wpm"`
+	Difficulty string  `json:"difficulty" bson:"difficulty"`
 }
